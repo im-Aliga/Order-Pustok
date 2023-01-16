@@ -1,7 +1,11 @@
-﻿using DemoApplication.Database;
+﻿using DemoApplication.Areas.Client.ViewModels.Account;
+using DemoApplication.Contracts.Order;
+using DemoApplication.Database;
 using DemoApplication.Services.Abstracts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using System.Linq;
 
 namespace DemoApplication.Areas.Client.Controllers
 {
@@ -22,19 +26,19 @@ namespace DemoApplication.Areas.Client.Controllers
         [HttpGet("dashboard", Name = "client-account-dashboard")]
         public IActionResult Dashboard()
         {
-            var user = _userService.CurrentUser;
-            var user2 = _userService.CurrentUser;
+           
 
             return View();
         }
 
         [HttpGet("orders", Name = "client-account-orders")]
-        public IActionResult Orders()
+        public async Task<IActionResult> OrdersAsync()
         {
-            var user = _userService.CurrentUser;
-            var user2 = _userService.CurrentUser;
+            var model = await _dataContext.Orders
+                 .Select(b => new OrderViewModel(b.Id,b.CreatedAt, StatusStatusCode.GetStatusCode((OrderStatus)b.Status), b.SumTotalPrice))
+                 .ToListAsync();
 
-            return View();
+            return View(model);
         }
     }
 }

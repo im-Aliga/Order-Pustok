@@ -1,6 +1,10 @@
-﻿using DemoApplication.Areas.Client.ViewModels.Checkout;
+﻿
+using DemoApplication.Areas.Client.ViewModels.Checkout;
+using DemoApplication.Contracts.Order;
 using DemoApplication.Database;
+using DemoApplication.Database.Models;
 using DemoApplication.Services.Abstracts;
+using DemoApplication.Services.Concretes;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
@@ -14,12 +18,15 @@ namespace DemoApplication.Areas.Client.Controllers
     public class CheckoutController : Controller
     {
         private readonly DataContext _dbContext;
-        
+        private readonly IUserService _userService;
+        private readonly IOrderService _orderService;
 
-        public CheckoutController(DataContext dbContext)
+
+        public CheckoutController(DataContext dbContext, IUserService userService, IOrderService orderService)
         {
             _dbContext = dbContext;
-            
+            _userService = userService;
+            _orderService = orderService;
         }
         [HttpGet("list", Name = "checkout-list")]
         public async Task<IActionResult> ListAsync()
@@ -28,29 +35,63 @@ namespace DemoApplication.Areas.Client.Controllers
             {
 
                 Products = await _dbContext.BasketProducts.Include(bp => bp.Book)
-                .Select(bp => new ProductListItemViewModel.ListItem(bp.Book.Title, bp.Quantity, bp.Book.Price, bp.Book.Price * bp.Quantity))
+                .Select(bp => new ProductListItemViewModel.ListItem(bp.BookId,bp.Book.Title, bp.Quantity, bp.Book.Price, bp.Book.Price * bp.Quantity))
                 .ToListAsync()
 
             };
 
             return View(model);
         }
-        [HttpPost("placeOrder", Name = "place-order-add")]
-        public ActionResult Add(AddViewModel model)
+
+        [HttpPost("place-order", Name = "client-checkout-place-order")]
+        public async Task<IActionResult> PlaceOrder()
         {
-            if (!ModelState.IsValid)
+            var pasketProducts = _dbContext.BasketProducts.Include(bp => bp.Book).Select(bp => new
+            ProductListItemViewModel.ListItem(bp.BookId, bp.Book.Title, bp.Quantity, bp.Book.Price, bp.Book.Price * bp.Quantity)).ToList();
+
+            var createOrder = await CreateOrder();
+
+            foreach (var basketProduct in pasketProducts)
             {
-                return View(model);
+                var orderProduct = new OrderProduct
+                {
+                    BookId = basketProduct.Id,
+                    Quantity = basketProduct.Quantity,
+                    OrderId = createOrder.Id
+
+                };
+
+                _dbContext.OrderProducts.Add(orderProduct);
             }
+             await DeleteBasketProducts();
+            _dbContext.SaveChanges();
 
-            _dbContext.Books.Add(new Book
+            async Task<Order> CreateOrder()
             {
-                Title = model.Title,
-                //Author = model.Author,
-                Price = model.Price.Value,
-            });
+                var order = new Order
+                {
+                    Id =_orderService.OrderCode,
+                    UserId = _userService.CurrentUser.Id,
+                    Status = (int)OrderStatus.Created,
+                    SumTotalPrice = _dbContext.BasketProducts.
+                    Where(bp => bp.Basket.UserId == _userService.CurrentUser.Id).Sum(bp => bp.Book.Price * bp.Quantity)
 
-            return RedirectToAction(nameof(List));
+                };
+
+                await _dbContext.Orders.AddAsync(order);
+
+                return order;
+
+            }
+            async Task DeleteBasketProducts()
+            {
+                var removedBasketProducts = await _dbContext.BasketProducts
+                       .Where(bp => bp.Basket.UserId == _userService.CurrentUser.Id).ToListAsync();
+
+                removedBasketProducts.ForEach(bp => _dbContext.BasketProducts.Remove(bp));
+
+            }
+                return RedirectToRoute("checkout-list");
         }
 
 

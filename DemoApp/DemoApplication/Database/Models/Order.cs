@@ -2,7 +2,7 @@
 
 namespace DemoApplication.Database.Models
 {
-    public class Order : BaseEntity<int>, IAuditable
+    public class Order : BaseEntity<string>, IAuditable
     {
         public Guid UserId { get; set; }
         public User User { get; set; }
@@ -12,7 +12,7 @@ namespace DemoApplication.Database.Models
         public List<OrderProduct>? OrderProducts { get; set; }
         public int  Status { get; set; }
 
-        public int SumTotalPrice { get; set; }  
+        public decimal SumTotalPrice { get; set; }  
 
 
     }
